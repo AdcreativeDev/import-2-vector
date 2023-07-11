@@ -3,3 +3,4 @@ langchain
 requests
 DateTime
 openai
+newsapi
