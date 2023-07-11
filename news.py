@@ -8,7 +8,6 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import SequentialChain
 from PIL import Image
 from langchain.document_loaders import WebBaseLoader
-from newsapi import NewsApiClient
 import requests
 import datetime
 
