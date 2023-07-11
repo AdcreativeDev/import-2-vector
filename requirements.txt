@@ -4,3 +4,4 @@ requests
 DateTime
 openai
 newsapi
+bs4
