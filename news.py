@@ -11,6 +11,9 @@ from langchain.document_loaders import WebBaseLoader
 import requests
 from PIL import Image
 import datetime
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+import tiktoken
+from langchain.embeddings import OpenAIEmbeddings
 
 # requirements.txt
 # streamlit
@@ -48,6 +51,20 @@ sample_text = """
 """
 
 
+with st.sidebar:
+    system_openai_api_key = os.environ.get('OPENAI_API_KEY')
+    system_openai_api_key = st.text_input(":key: OpenAI Key :", value=system_openai_api_key)
+    os.environ["OPENAI_API_KEY"] = system_openai_api_key
+
+
+    system_pinecone_api_key = os.environ.get('PINECONE_API_KEY')
+    system_pinecone_api_key = st.text_input(":key: PINCONE Key :", value=system_pinecone_api_key)
+    os.environ["PINECONE_API_KEY"] = system_pinecone_api_key
+
+    system_pinecone_env_key = os.environ.get('PINECONE_ENV')
+    system_pinecone_env_key = st.text_input(":key: PINCONE ENV :", value=system_pinecone_env_key)
+    os.environ["PINECONE_ENV"] = system_pinecone_env_key
+
 
 def read_file(filename):
     try:
@@ -58,6 +75,29 @@ def read_file(filename):
         print(f"Error: File '{filename}' not found.")
     except:
         print(f"Error: Could not read file '{filename}'.")
+
+def SplitFile():
+    with open(Extractionfilename) as f:
+        webcontent_file = f.read()
+    
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=100,
+        chunk_overlap=20,
+        length_function=len
+    )
+    chunks = text_splitter.create_documents([webcontent_file])
+
+    st.caption(f' ✔️ Split completed, No. of chunk :  {str(len(chunks))}')
+
+    
+    enc = tiktoken.encoding_for_model('text-embedding-ada-002')
+    total_tokens = sum([len(enc.encode(page.page_content)) for page in chunks])
+    formatted_total_tokens = "{:,}".format(total_tokens)
+    st.caption(f'✔️ Total Tokens: {formatted_total_tokens}')
+    st.caption(f'✔️ Embedding Cost in USD: {total_tokens / 1000 * 0.0004:.6f}')
+
+def create_vectors():
+    embeddings = OpenAIEmbeddings()
 
 
 def extraction():
@@ -75,6 +115,9 @@ def extraction():
         with open(Extractionfilename, "w") as file:
             for article in articles:
 
+                if NoOfProcess == 3:
+                    break
+                 
                 title = article['title'] 
                 url = article['url']
 
@@ -131,4 +174,5 @@ st.caption('Press below Button to start extraction')
 if st.button('start', type='primary'):
     extraction()
     DumpFileContents()
-    
+    SplitFile()
+    create_vectors()
