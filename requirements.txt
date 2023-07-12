@@ -5,3 +5,4 @@ DateTime
 openai
 newsapi
 bs4
+fake_useragent
