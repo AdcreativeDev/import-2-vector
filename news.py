@@ -14,6 +14,9 @@ import datetime
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import tiktoken
 from langchain.embeddings import OpenAIEmbeddings
+import pinecone
+from langchain.vectorstores import Pinecone
+
 
 # requirements.txt
 # streamlit
@@ -40,9 +43,13 @@ st.markdown(hide_menu_style, unsafe_allow_html=True)
 image = Image.open("ironman-banner.jpg")
 st.image(image, caption='created by MJ')
 
-
-
+#################
+# Global Variables
+################# 
+index_name = 'idx1'
 url = 'https://www.scmp.com/news/hong-kong/transport/article/3227297/hongkongers-flood-hk-express-website-carrier-gives-away-21626-free-tickets-many-fail-enter-booking'
+data = None
+
 
 # Get the current datetime as a string
 now = datetime.datetime.now()
@@ -96,8 +103,36 @@ def SplitFile():
     st.caption(f'✔️ Total Tokens: {formatted_total_tokens}')
     st.caption(f'✔️ Embedding Cost in USD: {total_tokens / 1000 * 0.0004:.6f}')
 
-def create_vectors():
     embeddings = OpenAIEmbeddings()
+    pinecone.init(api_key=os.environ.get('PINECONE_API_KEY'), environment=os.environ.get('PINECONE_ENV'))
+
+    # delete all index
+    # indexes = pinecone.list_indexes()    
+    # for i in indexes:
+    #     pinecone.delete_index(i)
+    #     st.caption(f' ✔️ Pinecone - delete index')
+
+    # # create index     
+    # if index_name not in pinecone.list_indexes():
+    #     pinecone.create_index(index_name, dimension=1536, metric='cosine')
+    #     st.caption(f'✔️ Pinecone - create index {index_name} ')
+
+    # indexes = pinecone.list_indexes()    
+    # for i in indexes:
+    #     st.caption(f' ✔️ Pinecone - index : {i.name} ')
+    st.caption(f'✔️ {now.strftime("%H-%M-%S")} : Start create vector store for document {Extractionfilename}')
+    vector_store = Pinecone.from_documents(chunks, embeddings, index_name=index_name)
+    st.caption(f'✔️ {now.strftime("%H-%M-%S")} : vector store created on index :{index_name}')
+    
+    query = 'anything about ebay ?'
+    st.caption(f'💬 Start Similarity Search : {query} ')
+    result = vector_store.similarity_search(query)
+    st.caption(f'🟢 Result  : {result} ')
+    found_result = [document.page_content for document in result]
+    st.caption(f'🟢 Extracted  : {found_result} ')
+
+
+
 
 
 def extraction():
@@ -115,7 +150,7 @@ def extraction():
         with open(Extractionfilename, "w") as file:
             for article in articles:
 
-                if NoOfProcess == 3:
+                if NoOfProcess == 2:
                     break
                  
                 title = article['title'] 
@@ -139,13 +174,8 @@ def extraction():
                     NoOfProcess = NoOfProcess + 1
             if (NoOfProcess > 0):
                 st.caption(f'✔️ Extraction completed, total : {str(NoOfProcess - 1)} website.')
-                col1 , col2  = st.columns(2)
-                with col1:  
-                    with st.expander(" Json Format:1"):
-                        st.code(data)
-                with col2:
-                    with st.expander(" Json Format:2"):
-                        st.write(data)
+                with st.expander(" Json Format:1"):
+                    st.code(data)
 
 
     else:
@@ -175,4 +205,3 @@ if st.button('start', type='primary'):
     extraction()
     DumpFileContents()
     SplitFile()
-    create_vectors()
