@@ -17,6 +17,12 @@ from langchain.embeddings import OpenAIEmbeddings
 import pinecone
 from langchain.vectorstores import Pinecone
 
+# Answering in Natural Language using an LLM
+from langchain.chains import RetrievalQA
+from langchain.chat_models import ChatOpenAI
+
+
+
 
 # requirements.txt
 # streamlit
@@ -120,17 +126,46 @@ def SplitFile():
     # indexes = pinecone.list_indexes()    
     # for i in indexes:
     #     st.caption(f' ✔️ Pinecone - index : {i.name} ')
+    now = datetime.datetime.now()
     st.caption(f'✔️ {now.strftime("%H-%M-%S")} : Start create vector store for document {Extractionfilename}')
     vector_store = Pinecone.from_documents(chunks, embeddings, index_name=index_name)
+    now = datetime.datetime.now()
     st.caption(f'✔️ {now.strftime("%H-%M-%S")} : vector store created on index :{index_name}')
     
     query = 'anything about ebay ?'
-    st.caption(f'💬 Start Similarity Search : {query} ')
+
+    st.subheader('1. LLM searach - new chunks')
+    st.caption(f'💬 Start Similarity Search (VectorStore): {query} ')
     result = vector_store.similarity_search(query)
     st.caption(f'🟢 Result  : {result} ')
     found_result = [document.page_content for document in result]
     st.caption(f'🟢 Extracted  : {found_result} ')
 
+
+    ### Answering in Natural Language using an LLM
+    st.subheader('2. LLM searach by Chain')
+    llm = ChatOpenAI(model='gpt-3.5-turbo', temperature=1)
+    st.caption(f'💬 Start Similarity Search (LLM): {query} ')
+    now = datetime.datetime.now()
+    st.caption(f'✔️ {now.strftime("%H-%M-%S")} : Start LLM Similarity')
+    retriever = vector_store.as_retriever(search_type='similarity', search_kwargs={'k': 3})
+    chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
+    LLM_Answer = chain.run(query)
+    now = datetime.datetime.now()
+    st.caption(f'🟢  {now.strftime("%H-%M-%S")} Completed  : {LLM_Answer} ')
+
+
+    ####  already have an index, you can load it like this   
+    st.subheader('Vector searach - index')
+    now = datetime.datetime.now()
+    st.caption(f'✔️ {now.strftime("%H-%M-%S")} : Start search by existing Index : {index_name}')
+    docsearch = Pinecone.from_existing_index(index_name, embeddings)
+    docs = docsearch.similarity_search(query)
+    existing_index_found_result = [document.page_content for document in docs]
+    now = datetime.datetime.now()
+    st.caption(f'🟢  {now.strftime("%H-%M-%S")} Completed   : {existing_index_found_result} ')
+
+    
 
 
 
@@ -195,6 +230,10 @@ def DumpFileContents():
             st.code(file_content)
     else:
         print("Error: Could not read file.")
+
+
+
+ 
 
 
 news_endpoint = 'https://newsapi.org/v2/top-headlines?sources=techcrunch&apiKey=3302aaafa5ae4d9eb441f833e249ce77'
