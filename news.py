@@ -89,10 +89,16 @@ def read_file(filename):
     except:
         print(f"Error: Could not read file '{filename}'.")
 
+################################################################
+# chrunk of content of output web content file, 
+################################################################
 def SplitFile():
+    st.subheader('0. Pinecone - create vectors and embedding')
+    
     with open(Extractionfilename) as f:
         webcontent_file = f.read()
     
+    # chrunk of content of output web content file
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=100,
         chunk_overlap=20,
@@ -102,23 +108,26 @@ def SplitFile():
 
     st.caption(f' ✔️ Split completed, No. of chunk :  {str(len(chunks))}')
 
-    
+    # calucate the tokens
     enc = tiktoken.encoding_for_model('text-embedding-ada-002')
     total_tokens = sum([len(enc.encode(page.page_content)) for page in chunks])
     formatted_total_tokens = "{:,}".format(total_tokens)
     st.caption(f'✔️ Total Tokens: {formatted_total_tokens}')
     st.caption(f'✔️ Embedding Cost in USD: {total_tokens / 1000 * 0.0004:.6f}')
 
+    # create embedding and pinecone vectors db
     embeddings = OpenAIEmbeddings()
     pinecone.init(api_key=os.environ.get('PINECONE_API_KEY'), environment=os.environ.get('PINECONE_ENV'))
 
     # delete all index
+    #####
     # indexes = pinecone.list_indexes()    
     # for i in indexes:
     #     pinecone.delete_index(i)
     #     st.caption(f' ✔️ Pinecone - delete index')
+    ######  
 
-    # # create index     
+    # create index     
     # if index_name not in pinecone.list_indexes():
     #     pinecone.create_index(index_name, dimension=1536, metric='cosine')
     #     st.caption(f'✔️ Pinecone - create index {index_name} ')
@@ -126,6 +135,8 @@ def SplitFile():
     # indexes = pinecone.list_indexes()    
     # for i in indexes:
     #     st.caption(f' ✔️ Pinecone - index : {i.name} ')
+
+    
     now = datetime.datetime.now()
     st.caption(f'✔️ {now.strftime("%H-%M-%S")} : Start create vector store for document {Extractionfilename}')
     vector_store = Pinecone.from_documents(chunks, embeddings, index_name=index_name)
@@ -134,7 +145,7 @@ def SplitFile():
     
     query = 'anything about ebay ?'
 
-    st.subheader('1. LLM searach - new chunks')
+    st.subheader('1. Pinecone Similarity Search on VectorStore')
     st.caption(f'💬 Start Similarity Search (VectorStore): {query} ')
     result = vector_store.similarity_search(query)
     st.caption(f'🟢 Result  : {result} ')
@@ -143,20 +154,23 @@ def SplitFile():
 
 
     ### Answering in Natural Language using an LLM
-    st.subheader('2. LLM searach by Chain')
+    st.subheader('2. LLM similarity searach on vectors')
     llm = ChatOpenAI(model='gpt-3.5-turbo', temperature=1)
     st.caption(f'💬 Start Similarity Search (LLM): {query} ')
     now = datetime.datetime.now()
     st.caption(f'✔️ {now.strftime("%H-%M-%S")} : Start LLM Similarity')
+
     retriever = vector_store.as_retriever(search_type='similarity', search_kwargs={'k': 3})
     chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
+    query = "Act as a writer, do the summary analysis of the articles, and list out the keywords"
     LLM_Answer = chain.run(query)
+    
     now = datetime.datetime.now()
     st.caption(f'🟢  {now.strftime("%H-%M-%S")} Completed  : {LLM_Answer} ')
 
 
     ####  already have an index, you can load it like this   
-    st.subheader('Vector searach - index')
+    st.subheader(f'3. Pinecone searach on existing index {index_name} ')
     now = datetime.datetime.now()
     st.caption(f'✔️ {now.strftime("%H-%M-%S")} : Start search by existing Index : {index_name}')
     docsearch = Pinecone.from_existing_index(index_name, embeddings)
@@ -165,19 +179,25 @@ def SplitFile():
     now = datetime.datetime.now()
     st.caption(f'🟢  {now.strftime("%H-%M-%S")} Completed   : {existing_index_found_result} ')
 
-    
 
 
 
 
+################################################################
+#   call newsapi , get url from json, use webloader to load website page
+#   write the content of file to text file 
+################################################################
 def extraction():
+    # call newsapi , get url from json
+    st.subheader('0. Call newsapi endpoint, extract webpage content and create text file ')
+
     response = requests.get(news_endpoint)
 
     AllWebLinks = ""
     if response.status_code == 200:
         data = response.json()
 
-
+        # read data from response, json
         st.caption('Start capture web content:')
         articles = data['articles']
         st.caption(f'Total {len(articles)} web page(s) will  extract')
@@ -185,7 +205,7 @@ def extraction():
         with open(Extractionfilename, "w") as file:
             for article in articles:
 
-                if NoOfProcess == 2:
+                if NoOfProcess == 4:
                     break
                  
                 title = article['title'] 
@@ -199,6 +219,7 @@ def extraction():
                 data = loader.load()
                 WebContent = data[0].page_content.replace('\n', '')
 
+                # if website have content, write to file
                 if len(WebContent) > 0:
                     WebContent_brief = WebContent[:100]
                     file.write("\n\n")
@@ -208,6 +229,7 @@ def extraction():
                     st.caption(f' ✔️ completed : {WebContent_brief}  ....' )
                     NoOfProcess = NoOfProcess + 1
             if (NoOfProcess > 0):
+                # dump the json message
                 st.caption(f'✔️ Extraction completed, total : {str(NoOfProcess - 1)} website.')
                 with st.expander(" Json Format:1"):
                     st.code(data)
